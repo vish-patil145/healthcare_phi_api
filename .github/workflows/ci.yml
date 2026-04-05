@@ -1,0 +1,131 @@
+# ci.yml - GitHub Actions Workflow for CI/CD
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # ─────────────────────────────────────────────
+  # 🔐 Security Scan (Rails)
+  # ─────────────────────────────────────────────
+  scan_ruby:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+
+      - name: Run Brakeman
+        run: bin/brakeman --no-pager
+
+  # ─────────────────────────────────────────────
+  # 🔍 Lint (Rubocop)
+  # ─────────────────────────────────────────────
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+
+      - name: Run Rubocop
+        run: bin/rubocop -f github
+
+  # ─────────────────────────────────────────────
+  # 🧪 Test (RSpec + Coverage + DB + Redis)
+  # ─────────────────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: true
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER:     ${{ secrets.DB_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          POSTGRES_DB:       ${{ secrets.DB_NAME }}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ✅ Ruby setup + caching
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+
+      # ✅ Run RSpec with Coverage
+      - name: Run Tests
+        env:
+          RAILS_ENV:        test
+          DB_HOST:          localhost
+          DB_USER:          ${{ secrets.DB_USER }}
+          DB_PASSWORD:      ${{ secrets.DB_PASSWORD }}
+          DB_NAME:          ${{ secrets.DB_NAME }}
+          REDIS_URL:        redis://localhost:6379/0
+          RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
+          COVERAGE:         true
+        run: |
+          bin/rails db:create db:schema:load
+          bundle exec rspec
+
+      # ✅ Upload Coverage Report
+      - name: Upload Coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+  # ─────────────────────────────────────────────
+  # 🚀 Deploy (Only if ALL pass)
+  # ─────────────────────────────────────────────
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [scan_ruby, lint, test]
+
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only

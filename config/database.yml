@@ -1,0 +1,38 @@
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+  username: <%= ENV.fetch("DB_USER", "postgres") %>
+  password: <%= ENV.fetch("DB_PASSWORD", "password") %>
+  host: <%= ENV["DB_HOST"]|| "localhost" %>
+  port: <%= ENV.fetch("DB_PORT", 5432) %>
+
+development:
+  <<: *default
+  database: <%= Rails.application.credentials.dig(:db, :dev_db_name) || "healthcare_phi_api_development" %>
+
+test:
+  <<: *default
+  database: <%= Rails.application.credentials.dig(:db, :test_db_name) || "healthcare_phi_api_test" %>
+
+production:
+  primary: &primary_production
+    <<: *default
+    database: <%= Rails.application.credentials.dig(:db, :prod_db_name) || "healthcare_phi_api_production" %>
+    username: <%= Rails.application.credentials.dig(:db, :user_name) || ENV["DB_USER"] %>
+    password: <%= Rails.application.credentials.dig(:db, :password) || ENV["DB_PASSWORD"] %>
+
+  cache:
+    <<: *primary_production
+    database: phi_data_production_cache
+    migrations_paths: db/cache_migrate
+
+  queue:
+    <<: *primary_production
+    database: phi_data_production_queue
+    migrations_paths: db/queue_migrate
+
+  cable:
+    <<: *primary_production
+    database: phi_data_production_cable
+    migrations_paths: db/cable_migrate
