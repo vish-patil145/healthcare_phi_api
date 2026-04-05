@@ -1,8 +1,8 @@
-# PHI Vault API
+# Healthcare PHI API
 
 A production-grade **Patient Health Information (PHI) management system** built with Ruby on Rails 8. Designed for healthcare environments where data security, auditability, and access control are non-negotiable.
 
-PHI Vault provides a secure REST API for managing patient records, controlling role-based access, and maintaining a full audit trail — with all sensitive fields encrypted at rest using AES-256-GCM.
+Healthcare PHI API provides a secure REST API for managing patient records, controlling role-based access, and maintaining a full audit trail — with all sensitive fields encrypted at rest using AES-256-GCM.
 
 ---
 
@@ -77,7 +77,7 @@ The `Middleware::RateLimiter` Rack middleware enforces rate limits via Redis. If
 | View medical records | ✅ | ✅ | ✅ | ✅ |
 | Create medical records | ✅ | ✅ | ❌ | ❌ |
 | Approve access requests | ✅ | ✅ | ❌ | ❌ |
-| View audit logs | ✅ | ✅ | ❌ | ❌ |
+| View audit logs | ✅ | ❌ | ❌ | ❌ |
 
 ---
 
@@ -91,7 +91,7 @@ The `Middleware::RateLimiter` Rack middleware enforces rate limits via Redis. If
 ### 1. Clone and boot
 
 ```bash
-git clone https://github.com/your-org/phi_vault_api.git
+git clone https://github.com/vish-patil145/healthcare_phi_api.git
 cd phi_vault_api
 docker compose up --build
 ```
