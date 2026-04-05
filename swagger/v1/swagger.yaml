@@ -1,0 +1,604 @@
+openapi: 3.0.1
+info:
+  title: PHI Vault API
+  version: v1
+  description: Patient Health Information Vault
+servers:
+- url: http://localhost:3000
+  description: Development
+
+security:                          # ✅ Fix 1 — global security
+- bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    PhiData:
+      type: object
+      properties:
+        diagnosis:    { type: string, example: "Type 2 Diabetes" }
+        symptoms:     { type: array, items: { type: string } }
+        doctor_notes: { type: string, example: "Monitor BP" }
+        medications:
+          type: array
+          items:
+            type: object
+            properties:
+              name:    { type: string }
+              dosage:  { type: string }
+        lab_results:  { type: object }
+    PhiRecordInput:
+      type: object
+      properties:
+        patient_id:  { type: integer, example: 1 }
+        record_type: { type: string, example: "general" }
+        status: { type: string, enum: [pending, processing, completed, failed], example: "pending" }        
+        data:
+          "$ref": "#/components/schemas/PhiData"
+      required: [patient_id, data]
+    PhiRecord:
+      type: object
+      properties:
+        id:          { type: integer }
+        patient_id:  { type: integer }
+        status:      { type: string, enum: [pending, processing, completed, failed] }
+        record_type: { type: string }
+        request_id:  { type: string }
+        created_at:  { type: string, format: datetime }
+    Patient:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        age:
+          type: integer
+        gender:
+          type: string
+          enum:
+          - male
+          - female
+          - other
+        email:
+          type: string
+          format: email          
+      required:
+      - name
+      - age
+      - gender
+      - email
+    PatientInput:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Jane Doe
+        age:
+          type: integer
+          example: 30
+        gender:
+          type: string
+          enum:
+          - male
+          - female
+          - other
+          example: female
+        email:
+          type: string
+          format: email
+          example: jane.doe@example.com
+      required:
+      - name
+      - age
+      - gender
+    LoginInput:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@hospital.com
+        password:
+          type: string
+          format: password
+          example: password123
+      required:
+      - email
+      - password
+    AuthToken:
+      type: object
+      properties:
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiJ9...
+      required:
+      - token
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+    Consent:
+      type: object
+      properties:
+        id:
+          type: integer
+        patient_id:
+          type: integer
+          example: 1
+        granted_to:
+          type: string
+          example: "doctor@hospital.com"
+        granted:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: datetime
+        updated_at:
+          type: string
+          format: datetime
+    ConsentInput:
+      type: object
+      properties:
+        patient_id:
+          type: integer
+          example: 1
+        granted_to:
+          type: string
+          example: "nurse@hospital.com"
+        granted:
+          type: boolean
+          example: true
+      required:
+        - patient_id
+        - granted_to
+        - granted
+    RateLimitError:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Rate limit exceeded. Try again later."
+paths:
+  "/api/v1/auth":
+    post:
+      summary: Generate JWT token (Login)
+      tags:
+      - Authentication
+      security: []                 # ✅ Fix 2 — public endpoint, overrides global
+      description: Authenticates a user with email and password. Returns a signed JWT token on success.
+      parameters: []
+      requestBody:                 # ✅ Fix 3 — use $ref instead of inline schema
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/LoginInput"
+      responses:
+        '200':
+          description: login successful
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/AuthToken"
+        '401':
+          description: invalid credentials
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+
+  "/api/v1/patients":
+    post:
+      summary: Create a patient
+      tags:
+      - Patients
+      security:
+      - bearerAuth: []
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/PatientInput"
+      responses:
+        '201':
+          description: patient created
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Patient"
+        '422':
+          description: validation failed
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '429':                                               # ← add this
+          description: rate limit exceeded
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/RateLimitError"        
+
+    get:
+      summary: List patients
+      tags:
+      - Patients
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: name
+        in: query
+        required: false
+        description: Filter by name (ILIKE)
+        schema:
+          type: string
+      - name: age
+        in: query
+        required: false
+        description: Filter by exact age
+        schema:
+          type: integer
+      - name: page
+        in: query
+        required: false
+        description: Page number
+        schema:
+          type: integer
+      - name: per_page
+        in: query
+        required: false
+        description: Records per page (default 10)
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      "$ref": "#/components/schemas/Patient"
+                  meta:
+                    type: object
+                    properties:
+                      current_page:
+                        type: integer
+                      total_pages:
+                        type: integer
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '429':                                               # ← add this
+          description: rate limit exceeded
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/RateLimitError"        
+  
+  "/api/v1/phi_records":
+      post:
+        summary: Create a PHI record
+        tags: [PHI Records]
+        security: [{ bearerAuth: [] }]
+        parameters:
+          - name: Idempotency-Key
+            in: header
+            required: true
+            description: Unique key to prevent duplicate submissions
+            schema: { type: string, example: "550e8400-e29b-41d4-a716-446655440000" }
+        requestBody:
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PhiRecordInput"
+        responses:
+          '201':
+            description: PHI record created
+            content:
+              application/json:
+                schema: { "$ref": "#/components/schemas/PhiRecord" }
+          '200':
+            description: Duplicate request — existing record returned
+            content:
+              application/json:
+                schema: { "$ref": "#/components/schemas/PhiRecord" }
+          '401': { description: unauthorized,  content: { application/json: { schema: { "$ref": "#/components/schemas/Error" } } } }
+          '403': { description: forbidden,     content: { application/json: { schema: { "$ref": "#/components/schemas/Error" } } } }
+          '422': { description: unprocessable, content: { application/json: { schema: { "$ref": "#/components/schemas/Error" } } } }
+          '429':                                               # ← add this
+            description: rate limit exceeded
+            content:
+              application/json:
+                schema:
+                  "$ref": "#/components/schemas/RateLimitError"
+
+      get:
+        summary: List PHI records
+        tags: [PHI Records]
+        security: [{ bearerAuth: [] }]
+        parameters:
+          - { name: status,     in: query, required: false, schema: { type: string, enum: [pending, processing, completed, failed] } }
+          - { name: patient_id, in: query, required: false, schema: { type: integer } }
+          - { name: page,       in: query, required: false, schema: { type: integer } }
+          - { name: per_page,   in: query, required: false, schema: { type: integer } }
+        responses:
+          '200':
+            description: success
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    data: { type: array, items: { "$ref": "#/components/schemas/PhiRecord" } }
+                    meta:
+                      type: object
+                      properties:
+                        current_page: { type: integer }
+                        total_pages:  { type: integer }
+          '429':                                               # ← add this
+          description: rate limit exceeded
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/RateLimitError"
+
+  "/api/v1/phi_records/{id}":
+    get:
+      summary: Show PHI record (role-masked)
+      tags: [PHI Records]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: PHI record with role-based masking applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:          { type: integer }
+                  patient_id:  { type: integer }
+                  status:      { type: string }
+                  data:        { "$ref": "#/components/schemas/PhiData" }
+                  created_at:  { type: string }
+        '403': { description: forbidden }
+        '404': { description: not found }
+        '429':                                               # ← add this
+          description: rate limit exceeded
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/RateLimitError"
+  
+  "/api/v1/consents":
+    post:
+      summary: Grant or revoke consent
+      tags:
+        - Consents
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ConsentInput"
+      responses:
+        '201':
+          description: consent created
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Consent"
+        '422':
+          description: validation failed
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '429':                                               # ← add this
+          description: rate limit exceeded
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/RateLimitError"        
+
+    get:
+      summary: List consents
+      tags:
+        - Consents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: patient_id
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: granted_to
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: granted
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: consents listed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      "$ref": "#/components/schemas/Consent"
+                  meta:
+                    type: object
+                    properties:
+                      current_page:
+                        type: integer
+                      total_pages:
+                        type: integer
+        '429':                                               # ← add this
+          description: rate limit exceeded
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/RateLimitError"
+
+  "/api/v1/consents/{id}":
+    get:
+      summary: Show consent
+      tags:
+        - Consents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: consent found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Consent"
+        '404':
+          description: not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '429':                                               # ← add this
+          description: rate limit exceeded
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/RateLimitError"
+
+    patch:
+      summary: Update consent (grant or revoke)
+      tags:
+        - Consents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                granted:
+                  type: boolean
+                  example: false
+      responses:
+        '200':
+          description: consent updated
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Consent"
+        '403':
+          description: forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '429':                                               # ← add this
+          description: rate limit exceeded
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/RateLimitError"
+
+    delete:
+      summary: Delete consent
+      tags:
+        - Consents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: consent revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Consent revoked"
+        '403':
+          description: forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '429':                                               # ← add this
+          description: rate limit exceeded
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/RateLimitError"

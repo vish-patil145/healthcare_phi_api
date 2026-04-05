@@ -1,0 +1,91 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${USER_NAME}
+      POSTGRES_PASSWORD: ${PASSWORD}
+      POSTGRES_DB: ${DEV_DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${USER_NAME} -d ${DEV_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - phi_network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - phi_network
+
+  web:
+    build:
+      context: .
+      target: development
+    command: >
+      bash -c "
+        rm -f tmp/pids/server.pid &&
+        bundle install &&
+        bin/rails db:prepare &&
+        bin/rails server -b 0.0.0.0 -p ${PORT}
+      "
+    volumes:
+      - .:/rails
+      - bundle_cache:/usr/local/bundle
+    ports:
+      - "${PORT}:${PORT}"
+    environment:
+      DATABASE_URL: postgres://${USER_NAME}:${PASSWORD}@db:${DB_PORT}/${DEV_DB_NAME}
+      REDIS_URL: redis://redis:6379/0
+      RAILS_MAX_THREADS: ${RAILS_MAX_THREADS}
+      RAILS_LOG_LEVEL: ${RAILS_LOG_LEVEL}
+      DATABASE_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - phi_network
+
+  sidekiq:
+    build:
+      context: .
+      target: development
+    command: >
+      bash -c "
+        bundle install &&
+        bundle exec sidekiq -c ${JOB_CONCURRENCY}
+      "
+    volumes:
+      - .:/rails
+      - bundle_cache:/usr/local/bundle
+    environment:
+      DATABASE_URL: postgres://${USER_NAME}:${PASSWORD}@db:${DB_PORT}/${DEV_DB_NAME}
+      REDIS_URL: redis://redis:6379/0
+      RAILS_MAX_THREADS: ${RAILS_MAX_THREADS}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - phi_network
+
+volumes:
+  postgres_data:
+  bundle_cache:
+
+networks:
+  phi_network:
+    driver: bridge
