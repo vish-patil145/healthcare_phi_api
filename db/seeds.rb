@@ -39,22 +39,23 @@ puts "✅ Users seeded successfully!"
 puts "🌱 Seeding Patients..."
 
 patients = [
-  { name: "Aarav Sharma",  age: 34, gender: "male" },
-  { name: "Priya Patel",   age: 28, gender: "female" },
-  { name: "Rohit Mehta",   age: 45, gender: "male" },
-  { name: "Sneha Iyer",    age: 31, gender: "female" },
-  { name: "Vikram Singh",  age: 52, gender: "male" },
-  { name: "Ananya Gupta",  age: 24, gender: "female" },
-  { name: "Manish Joshi",  age: 38, gender: "male" },
-  { name: "Kavya Nair",    age: 29, gender: "female" },
-  { name: "Arjun Reddy",   age: 41, gender: "male" },
-  { name: "Deepika Verma", age: 36, gender: "female" }
+  { name: "Aarav Sharma",  age: 34, gender: "male",   email: "aarav.sharma@example.com" },
+  { name: "Priya Patel",   age: 28, gender: "female",  email: "priya.patel@example.com" },
+  { name: "Rohit Mehta",   age: 45, gender: "male",   email: "rohit.mehta@example.com" },
+  { name: "Sneha Iyer",    age: 31, gender: "female",  email: "sneha.iyer@example.com" },
+  { name: "Vikram Singh",  age: 52, gender: "male",   email: "vikram.singh@example.com" },
+  { name: "Ananya Gupta",  age: 24, gender: "female",  email: "ananya.gupta@example.com" },
+  { name: "Manish Joshi",  age: 38, gender: "male",   email: "manish.joshi@example.com" },
+  { name: "Kavya Nair",    age: 29, gender: "female",  email: "kavya.nair@example.com" },
+  { name: "Arjun Reddy",   age: 41, gender: "male",   email: "arjun.reddy@example.com" },
+  { name: "Deepika Verma", age: 36, gender: "female",  email: "deepika.verma@example.com" }
 ]
 
 patients.each do |attrs|
   Patient.find_or_create_by!(name: attrs[:name]) do |p|
     p.age    = attrs[:age]
     p.gender = attrs[:gender]
+    p.email  = attrs[:email]
   end
 end
 
