@@ -178,6 +178,50 @@ GEM
       activerecord
       kaminari-core (= 1.2.2)
     kaminari-core (1.2.2)
+    karafka (2.5.9)
+      karafka-core (>= 2.5.6, < 2.6.0)
+      karafka-rdkafka (>= 0.24.0)
+      waterdrop (>= 2.8.14, < 3.0.0)
+      zeitwerk (~> 2.3)
+    karafka-core (2.5.13)
+      karafka-rdkafka (>= 0.20.0)
+      logger (>= 1.6.0)
+    karafka-rdkafka (0.26.1)
+      ffi (~> 1.17.1)
+      json (> 2.0)
+      logger
+      mini_portile2 (~> 2.6)
+      rake (> 12)
+    karafka-rdkafka (0.26.1-aarch64-linux-gnu)
+      ffi (~> 1.17.1)
+      json (> 2.0)
+      logger
+      mini_portile2 (~> 2.6)
+      rake (> 12)
+    karafka-rdkafka (0.26.1-aarch64-linux-musl)
+      ffi (~> 1.17.1)
+      json (> 2.0)
+      logger
+      mini_portile2 (~> 2.6)
+      rake (> 12)
+    karafka-rdkafka (0.26.1-arm64-darwin)
+      ffi (~> 1.17.1)
+      json (> 2.0)
+      logger
+      mini_portile2 (~> 2.6)
+      rake (> 12)
+    karafka-rdkafka (0.26.1-x86_64-linux-gnu)
+      ffi (~> 1.17.1)
+      json (> 2.0)
+      logger
+      mini_portile2 (~> 2.6)
+      rake (> 12)
+    karafka-rdkafka (0.26.1-x86_64-linux-musl)
+      ffi (~> 1.17.1)
+      json (> 2.0)
+      logger
+      mini_portile2 (~> 2.6)
+      rake (> 12)
     language_server-protocol (3.17.0.5)
     launchy (3.1.1)
       addressable (~> 2.8)
@@ -200,6 +244,7 @@ GEM
     mini_magick (5.3.1)
       logger
     mini_mime (1.1.5)
+    mini_portile2 (2.8.9)
     minitest (6.0.2)
       drb (~> 2.0)
       prism (~> 1.5)
@@ -437,6 +482,10 @@ GEM
     uniform_notifier (1.18.0)
     uri (1.1.1)
     useragent (0.16.11)
+    waterdrop (2.9.0)
+      karafka-core (>= 2.5.12, < 3.0.0)
+      karafka-rdkafka (>= 0.24.0)
+      zeitwerk (~> 2.3)
     websocket-driver (0.8.0)
       base64
       websocket-extensions (>= 0.1.0)
@@ -470,6 +519,7 @@ DEPENDENCIES
   jwt
   kamal
   kaminari
+  karafka (~> 2.4)
   letter_opener
   paranoia
   pg (~> 1.1)

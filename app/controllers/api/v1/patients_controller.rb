@@ -29,6 +29,12 @@ class Api::V1::PatientsController < ApplicationController
   end
 
   def show
+    audit_phi_access(
+      action:      "read",
+      resource:    "Patient",
+      resource_id: @patient.id,
+      patient_id:  @patient.id
+    )
     authorize @patient
     render json: @patient
   end
