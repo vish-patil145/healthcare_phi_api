@@ -1,4 +1,5 @@
 class ApplicationController < ActionController::API
+  include KafkaAuditable
   include Pundit::Authorization
   rescue_from Pundit::NotAuthorizedError, with: :user_not_authorized
   before_action :authenticate_request
@@ -18,7 +19,6 @@ class ApplicationController < ActionController::API
   def authenticate_request
     token = extract_token_from_header
     decoded = JwtService.decode(token)
-
     if decoded
       @current_user = User.find_by(id: decoded["user_id"])
       render_unauthorized unless @current_user

@@ -6,6 +6,11 @@ class Api::V1::PatientsController < ApplicationController
     authorize @patient
 
     if @patient.save
+      PatientCreatedProducer.publish(
+        patient:    @patient,
+        user_id:    current_user&.id,
+        ip_address: request.remote_ip
+      )
       render json: @patient, status: :created
     else
       render json: { errors: @patient.errors.full_messages }, status: :unprocessable_entity
@@ -29,6 +34,12 @@ class Api::V1::PatientsController < ApplicationController
   end
 
   def show
+    audit_phi_access(
+      action:      "read",
+      resource:    "Patient",
+      resource_id: @patient.id,
+      patient_id:  @patient.id
+    )
     authorize @patient
     render json: @patient
   end
