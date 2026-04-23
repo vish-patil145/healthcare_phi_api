@@ -6,6 +6,11 @@ class Api::V1::PatientsController < ApplicationController
     authorize @patient
 
     if @patient.save
+      PatientCreatedProducer.publish(
+        patient:    @patient,
+        user_id:    current_user&.id,
+        ip_address: request.remote_ip
+      )
       render json: @patient, status: :created
     else
       render json: { errors: @patient.errors.full_messages }, status: :unprocessable_entity

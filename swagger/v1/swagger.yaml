@@ -293,7 +293,39 @@ paths:
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/RateLimitError"        
+                "$ref": "#/components/schemas/RateLimitError"    
+  "/api/v1/patients/{id}":
+    get:
+      summary: Show a patient
+      tags:
+        - Patients
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: patient found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '404':
+          description: patient not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   
   "/api/v1/phi_records":
       post:

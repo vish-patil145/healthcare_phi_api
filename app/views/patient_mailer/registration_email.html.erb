@@ -1,9 +1,5 @@
-<%# app/views/patient_mailer/registration_email.html.erb %>
-<!DOCTYPE html>
-<html>
-  <body>
-    <p>Dear <%= @patient.name %>,</p>
-    <p>You are registered with our hospital.</p>
-    <p>Thank you for choosing us for your healthcare needs.</p>
-  </body>
-</html>
+<%# app/views/patient_mailer/welcome_email.html.erb %>
+
+<h1>Welcome, <%= @patient.name %>!</h1>
+<p>Your patient profile has been successfully created.</p>
+<p>You can now access your health records through our portal.</p>
