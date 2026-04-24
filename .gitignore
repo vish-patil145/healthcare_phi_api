@@ -9,6 +9,7 @@
 
 # Ignore all environment files.
 /.env*
+!/.env.example
 
 # Ignore all logfiles and tempfiles.
 /log/*
@@ -40,3 +41,4 @@ config/master.key
 
 # Docker
 docker-compose.override.ymlcoverage/
+kubernetes/secrets.yaml
