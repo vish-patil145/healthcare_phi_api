@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rails-web
+  namespace: healthcare
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rails-web
+  template:
+    metadata:
+      labels:
+        app: rails-web
+    spec:
+      initContainers:
+        # Runs db:prepare before Rails starts
+        - name: db-migrate
+          image: healthcare-phi-api:latest
+          imagePullPolicy: Never
+          command: ["bin/rails", "db:prepare"]
+          envFrom:
+            - configMapRef:
+                name: healthcare-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-secrets
+                  key: database-url
+            - name: SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-secrets
+                  key: secret-key-base
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-secrets
+                  key: redis-url
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-secrets
+                  key: db-user
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-secrets
+                  key: db-password
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-secrets
+                  key: db-name
+      containers:
+      - name: rails
+        image: healthcare-phi-api:latest
+        imagePullPolicy: Never
+        ports:
+          - containerPort: 3000
+        envFrom:
+          - configMapRef:
+              name: healthcare-config
+        env:
+          - name: DATABASE_URL
+            valueFrom:
+              secretKeyRef:
+                name: healthcare-secrets
+                key: database-url
+          - name: SECRET_KEY_BASE
+            valueFrom:
+              secretKeyRef:
+                name: healthcare-secrets
+                key: secret-key-base
+          - name: REDIS_URL
+            valueFrom:
+              secretKeyRef:
+                name: healthcare-secrets
+                key: redis-url
+          - name: DB_USER
+            valueFrom:
+              secretKeyRef:
+                name: healthcare-secrets
+                key: db-user
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: healthcare-secrets
+                key: db-password
+          - name: DB_NAME
+            valueFrom:
+              secretKeyRef:
+                name: healthcare-secrets
+                key: db-name
+        readinessProbe:
+          httpGet:
+            path: /up
+            port: 3000
+          initialDelaySeconds: 30    # wait 30s before first check
+          periodSeconds: 15          # check every 15s
+          failureThreshold: 5        # allow 5 failures before marking unready
+          timeoutSeconds: 10         # wait 10s for response
+        livenessProbe:
+          httpGet:
+            path: /up
+            port: 3000
+          initialDelaySeconds: 60    # wait 60s before first kill decision
+          periodSeconds: 30          # check every 30s
+          failureThreshold: 5        # allow 5 failures before killing
+          timeoutSeconds: 10

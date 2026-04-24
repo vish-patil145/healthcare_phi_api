@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: karafka
+  namespace: healthcare
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: karafka
+  template:
+    metadata:
+      labels:
+        app: karafka
+    spec:
+      containers:
+        - name: karafka
+          image: healthcare-phi-api:latest
+          imagePullPolicy: Never
+          command: ["bundle", "exec", "karafka", "server"]
+          envFrom:
+            - configMapRef:
+                name: healthcare-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-secrets
+                  key: database-url
+            - name: SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-secrets
+                  key: secret-key-base
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-secrets
+                  key: redis-url
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: KAFKA_BOOTSTRAP_SERVERS

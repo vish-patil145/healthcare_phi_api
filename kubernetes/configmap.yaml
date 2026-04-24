@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: healthcare-config
+  namespace: healthcare
+data:
+  RAILS_ENV: "development"
+  RAILS_LOG_LEVEL: "info"
+  RAILS_MAX_THREADS: "5"
+  JOB_CONCURRENCY: "5"
+  PORT: "3000"
+  DB_PORT: "5432"
+  DB_HOST: "postgres-service"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka-service:29092"
+  RAILS_LOG_TO_STDOUT: "true"
