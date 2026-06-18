@@ -16,6 +16,7 @@ Healthcare PHI API provides a secure REST API for managing patient records, cont
 - [API Documentation](#api-documentation)
 - [Running Tests](#running-tests)
 - [Background Jobs](#background-jobs)
+- [Kubernetes Deployment](#kubernetes-deployment)
 - [Deployment](#deployment)
 - [Security Notes](#security-notes)
 - [Postman Collection](#postman-collection)
@@ -31,14 +32,16 @@ Healthcare PHI API provides a secure REST API for managing patient records, cont
 | Database | PostgreSQL |
 | Cache / Queue backend | Redis |
 | Background jobs | Sidekiq |
+| Message broker | Apache Kafka + Zookeeper |
+| Kafka consumer | Karafka |
 | Authentication | JWT (with JTI revocation) |
 | Authorisation | Pundit (RBAC) |
 | Encryption | Active Record Encryption — AES-256-GCM |
 | API Docs | rswag / OpenAPI 3.0 (Swagger UI) |
 | Testing | RSpec + SimpleCov |
 | CI | GitHub Actions |
-| Deployment | Fly.io |
 | Containerisation | Docker / Docker Compose |
+| Orchestration | Kubernetes (Minikube for local) |
 
 ---
 
@@ -214,6 +217,235 @@ Monitor jobs via the Sidekiq Web UI at `/sidekiq` (admin access required).
 
 ---
 
+## Kubernetes Deployment
+
+The full stack is orchestrated with Kubernetes. For local development, [Minikube](https://minikube.sigs.k8s.io/) is used to run a single-node cluster inside Docker.
+
+### Architecture
+
+```
+Minikube Cluster (local)
+└── Namespace: healthcare
+     ├── rails-web        (Deployment — 2 replicas)
+     ├── sidekiq          (Deployment — 1 replica)
+     ├── karafka          (Deployment — 1 replica)
+     ├── postgres         (Deployment + PersistentVolumeClaim)
+     ├── redis            (Deployment)
+     ├── kafka            (Deployment)
+     └── zookeeper        (Deployment)
+```
+
+Every docker-compose service maps to a Kubernetes **Deployment** and a **Service** for internal DNS routing. Sensitive values (passwords, keys) live in a Kubernetes **Secret**; non-sensitive config lives in a **ConfigMap**.
+
+### Kubernetes folder structure
+
+```
+kubernetes/
+├── namespace.yaml
+├── secrets.yaml
+├── configmap.yaml
+├── postgres/
+│   ├── pvc.yaml
+│   ├── deployment.yaml
+│   └── service.yaml
+├── redis/
+│   ├── deployment.yaml
+│   └── service.yaml
+├── zookeeper/
+│   ├── deployment.yaml
+│   └── service.yaml
+├── kafka/
+│   ├── deployment.yaml
+│   └── service.yaml
+├── rails/
+│   ├── deployment.yaml
+│   └── service.yaml
+├── sidekiq/
+│   └── deployment.yaml
+└── karafka/
+    └── deployment.yaml
+```
+
+### Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) (required as Minikube driver)
+- [kubectl](https://kubernetes.io/docs/tasks/tools/) — Kubernetes CLI
+- [Minikube](https://minikube.sigs.k8s.io/docs/start/) — local Kubernetes cluster
+- [Helm](https://helm.sh/docs/intro/install/) — Kubernetes package manager
+
+### 1. Install kubectl
+
+```bash
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+chmod +x kubectl
+sudo mv kubectl /usr/local/bin/
+kubectl version --client
+```
+
+### 2. Install Minikube
+
+```bash
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+sudo install minikube-linux-amd64 /usr/local/bin/minikube
+minikube version
+```
+
+### 3. Install Helm
+
+```bash
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+helm version
+```
+
+### 4. Start Minikube
+
+```bash
+minikube start --driver=docker --cpus=2 --memory=4096
+kubectl get nodes
+# NAME       STATUS   ROLES           AGE   VERSION
+# minikube   Ready    control-plane   1m    v1.35.x
+```
+
+> If you get a Docker permission error: `sudo usermod -aG docker $USER && newgrp docker`
+
+### 5. Enable addons
+
+```bash
+minikube addons enable ingress
+minikube addons enable metrics-server
+minikube addons enable dashboard
+```
+
+### 6. Build the Docker image inside Minikube
+
+Minikube runs its own Docker daemon. You must build the image inside it so Kubernetes can find it.
+
+```bash
+# Point your shell to Minikube's Docker
+eval $(minikube docker-env)
+
+# Build the production image
+docker build --target production -t healthcare-phi-api:latest .
+
+# Verify
+docker images | grep healthcare
+```
+
+> **Important:** Run `eval $(minikube docker-env)` again after every Minikube restart.
+
+### 7. Configure secrets
+
+Edit `kubernetes/secrets.yaml` and fill in your values before deploying:
+
+```yaml
+stringData:
+  db-user: "postgres"
+  db-password: "yourpassword"
+  db-name: "healthcare_phi_api_development"
+  secret-key-base: "<output of rails secret>"
+  redis-url: "redis://redis-service:6379/0"
+  database-url: "postgres://postgres:yourpassword@postgres-service:5432/healthcare_phi_api_development"
+```
+
+> Note: All hostnames must use Kubernetes Service names (`postgres-service`, `redis-service`, `kafka-service`) — **not** docker-compose service names (`db`, `redis`, `kafka`).
+
+### 8. Deploy all services
+
+```bash
+# Foundation
+kubectl apply -f kubernetes/namespace.yaml
+kubectl apply -f kubernetes/secrets.yaml
+kubectl apply -f kubernetes/configmap.yaml
+
+# Infrastructure (Postgres, Redis, Kafka)
+kubectl apply -f kubernetes/postgres/
+kubectl apply -f kubernetes/redis/
+kubectl apply -f kubernetes/zookeeper/
+kubectl apply -f kubernetes/kafka/
+
+# Wait for database and cache to be ready
+kubectl wait --for=condition=ready pod -l app=postgres -n healthcare --timeout=120s
+kubectl wait --for=condition=ready pod -l app=redis -n healthcare --timeout=60s
+
+# Application services
+kubectl apply -f kubernetes/rails/
+kubectl apply -f kubernetes/sidekiq/
+kubectl apply -f kubernetes/karafka/
+```
+
+### 9. Verify all pods are running
+
+```bash
+kubectl get pods -n healthcare
+# NAME                         READY   STATUS    RESTARTS   AGE
+# postgres-xxx                 1/1     Running   0          2m
+# redis-xxx                    1/1     Running   0          2m
+# zookeeper-xxx                1/1     Running   0          2m
+# kafka-xxx                    1/1     Running   0          2m
+# rails-web-xxx                1/1     Running   0          1m
+# rails-web-yyy                1/1     Running   0          1m
+# sidekiq-xxx                  1/1     Running   0          1m
+# karafka-xxx                  1/1     Running   0          1m
+```
+
+### 10. Access the API locally
+
+```bash
+# Create a tunnel to the Rails service
+kubectl port-forward -n healthcare service/rails-service 3000:3000
+
+# In a new terminal — test the health endpoint
+curl http://localhost:3000/up
+# Returns: HTTP 200 with green response body
+```
+
+### Key differences: docker-compose vs Kubernetes
+
+| Concept | docker-compose | Kubernetes |
+|---|---|---|
+| Service hostname | `db`, `redis`, `kafka` | `postgres-service`, `redis-service`, `kafka-service` |
+| Secrets | `.env` file | `kubectl` Secret (base64 encoded) |
+| Config | `.env` file | ConfigMap |
+| Scaling | manual | `replicas:` in Deployment |
+| Crash recovery | manual restart | automatic (always restarts) |
+| Health checks | `healthcheck:` block | `readinessProbe` + `livenessProbe` |
+| Persistent storage | `volumes:` | PersistentVolumeClaim |
+
+### Useful commands
+
+```bash
+# Cluster management
+minikube start / stop / status
+minikube dashboard          # open visual UI in browser
+
+# Pod management
+kubectl get pods -n healthcare
+kubectl logs -n healthcare <pod-name>
+kubectl describe pod -n healthcare <pod-name>
+kubectl exec -n healthcare -it <pod-name> -- bash
+
+# Rolling restart (after image rebuild)
+eval $(minikube docker-env)
+docker build --target production -t healthcare-phi-api:latest .
+kubectl rollout restart deployment/rails-web -n healthcare
+kubectl rollout restart deployment/sidekiq -n healthcare
+kubectl rollout restart deployment/karafka -n healthcare
+
+# Delete and redeploy everything
+kubectl delete namespace healthcare
+kubectl apply -f kubernetes/namespace.yaml
+# ... re-apply all manifests
+```
+
+### Known gotchas
+
+- Always run `eval $(minikube docker-env)` before building — otherwise the image is built in your system Docker, not Minikube's, and pods will get `ImagePullBackOff`.
+- The `debug` gem must have `require: false` in the Gemfile — the production image excludes development gems, so `require: "debug/prelude"` causes a `LoadError` at boot.
+- Use Kubernetes Service names as hostnames everywhere (`postgres-service:5432`, not `localhost:5432`).
+- `db:prepare` runs as a Kubernetes `initContainer` before Rails starts — this ensures migrations are applied before the app accepts traffic.
+
+---
+
 ## Deployment
 
 The app is deployed to [Fly.io](https://fly.io).
@@ -298,4 +530,4 @@ Watch a walkthrough of the API via Swagger UI:
 
 ---
 
-*Built with Rails 8 · Secured for healthcare · Tested with RSpec*
+*Built with Rails 8 · Secured for healthcare · Tested with RSpec · Orchestrated with Kubernetes*

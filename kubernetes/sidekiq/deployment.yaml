@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sidekiq
+  namespace: healthcare
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sidekiq
+  template:
+    metadata:
+      labels:
+        app: sidekiq
+    spec:
+      containers:
+        - name: sidekiq
+          image: healthcare-phi-api:latest
+          imagePullPolicy: Never
+          command: ["bundle", "exec", "sidekiq", "-c", "5"]
+          envFrom:
+            - configMapRef:
+                name: healthcare-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-secrets
+                  key: database-url
+            - name: SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-secrets
+                  key: secret-key-base
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-secrets
+                  key: redis-url
